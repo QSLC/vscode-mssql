@@ -47,7 +47,7 @@ if (usePackagedDependencies && packagedDependencies.some((dependency) => !depend
 // default .vscode-test/user-data/ path over macOS's hard 103-char Unix socket path limit.
 // Tracked in: https://github.com/microsoft/vscode/issues/319752
 // Use short, isolated temp directories for both user data and extensions. The extensions directory
-// must be isolated in CI so a cached Marketplace dependency cannot shadow a same-run VSIX.
+// is isolated per CI invocation so a cached Marketplace dependency cannot shadow a same-run VSIX.
 const tmpBaseDir = process.platform === "darwin" ? "/tmp" : os.tmpdir();
 const userDataDir = fs.mkdtempSync(path.join(tmpBaseDir, "vsc-sqlproj-"));
 const extensionsDir = fs.mkdtempSync(path.join(tmpBaseDir, "vsc-sqlproj-ext-"));
