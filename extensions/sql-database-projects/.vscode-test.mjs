@@ -3,10 +3,44 @@ import { createMochaConfig, defaultCoverageConfig } from "../../scripts/vscode-t
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { fileURLToPath } from "url";
 
 const mocha = createMochaConfig({
     timeout: 30_000,
 });
+
+const configDir = path.dirname(fileURLToPath(import.meta.url));
+
+function findSingleVsix(relativeDirectory, filenamePrefix) {
+    const directory = path.resolve(configDir, relativeDirectory);
+    if (!fs.existsSync(directory)) {
+        return undefined;
+    }
+
+    const matches = fs
+        .readdirSync(directory)
+        .filter((filename) => filename.startsWith(filenamePrefix) && filename.endsWith(".vsix"));
+
+    if (matches.length !== 1) {
+        return undefined;
+    }
+
+    return path.join(directory, matches[0]);
+}
+
+const usePackagedDependencies = process.env.GITHUB_ACTIONS === "true";
+const packagedDependencies = usePackagedDependencies
+    ? [
+          findSingleVsix("../mssql", "mssql-"),
+          findSingleVsix("../data-workspace", "data-workspace-vscode-"),
+      ]
+    : [];
+
+if (usePackagedDependencies && packagedDependencies.some((dependency) => !dependency)) {
+    throw new Error(
+        "SqlProj CI requires exactly one same-run MSSQL VSIX and one Data Workspace VSIX.",
+    );
+}
 
 // TODO: Workaround for macOS CI EINVAL error — revert once the upstream VS Code issue is fixed.
 // A recent VS Code build changed the socket filename format (e.g. "1.12-main.sock"), pushing the
@@ -26,6 +60,9 @@ export default defineConfig({
             files: "out/test/**/*.test.js",
             version: "insiders",
             launchArgs: ["--disable-gpu", "--user-data-dir", userDataDir],
+            // CI must exercise the same-head API surface rather than ambient Marketplace builds.
+            installExtensions: usePackagedDependencies ? packagedDependencies : undefined,
+            skipExtensionDependencies: usePackagedDependencies,
             env: {
                 SQLPROJ_TEST_MODE: "1",
                 VSCODE_LOG_LEVEL: "error",
