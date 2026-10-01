@@ -427,11 +427,7 @@ jobs:
 
       - name: SqlProj - Run unit tests
         continue-on-error: true
-        run: |- name: Install VSIX Packages
-  run: |
-    npm install -g ./extensions/mssql/mssql-*.vsix
-    npm install -g ./extensions/data-workspace/data-workspace-*.vsix
-
+        run: |
           set +e  # Don't exit on errors
           DISPLAY=:10 npm run test -- --target sql-database-projects
           UNIT_EXIT_CODE=$?
