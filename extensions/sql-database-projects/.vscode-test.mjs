@@ -46,28 +46,26 @@ if (usePackagedDependencies && packagedDependencies.some((dependency) => !depend
 // A recent VS Code build changed the socket filename format (e.g. "1.12-main.sock"), pushing the
 // default .vscode-test/user-data/ path over macOS's hard 103-char Unix socket path limit.
 // Tracked in: https://github.com/microsoft/vscode/issues/319752
-// Use short, isolated temp directories for both user data and extensions. The extensions directory
-// is isolated per CI invocation so a cached Marketplace dependency cannot shadow a same-run VSIX.
 const tmpBaseDir = process.platform === "darwin" ? "/tmp" : os.tmpdir();
 const userDataDir = fs.mkdtempSync(path.join(tmpBaseDir, "vsc-sqlproj-"));
-const extensionsDir = fs.mkdtempSync(path.join(tmpBaseDir, "vsc-sqlproj-ext-"));
-process.on("exit", () => {
-    fs.rmSync(userDataDir, { recursive: true, force: true });
-    fs.rmSync(extensionsDir, { recursive: true, force: true });
-});
+process.on("exit", () => fs.rmSync(userDataDir, { recursive: true, force: true }));
+
+if (usePackagedDependencies) {
+    // @vscode/test-cli installs pre-launch VSIX files into its normal .vscode-test/extensions
+    // directory. Clear that directory before CI installation so cached Marketplace builds cannot
+    // shadow the exact same-run MSSQL and Data Workspace packages.
+    fs.rmSync(path.join(configDir, ".vscode-test", "extensions"), {
+        recursive: true,
+        force: true,
+    });
+}
 
 export default defineConfig({
     tests: [
         {
             files: "out/test/**/*.test.js",
             version: "insiders",
-            launchArgs: [
-                "--disable-gpu",
-                "--user-data-dir",
-                userDataDir,
-                "--extensions-dir",
-                extensionsDir,
-            ],
+            launchArgs: ["--disable-gpu", "--user-data-dir", userDataDir],
             // CI must exercise the same-head API surface rather than ambient Marketplace builds.
             installExtensions: usePackagedDependencies ? packagedDependencies : undefined,
             skipExtensionDependencies: usePackagedDependencies,
