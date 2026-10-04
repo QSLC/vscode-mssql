@@ -73,7 +73,8 @@ export async function launchVsCodeWithMssqlExtension(
     };
 
     const vsCodeVersion = getVsCodeVersionName();
-    const vscodePath = await downloadAndUnzipVSCode(vsCodeVersion);
+    const downloadedVscodePath = await downloadAndUnzipVSCode(vsCodeVersion);
+    const vscodePath = resolveExistingVscodeExecutable(downloadedVscodePath);
     const [cliPath] = resolveCliArgsFromVSCodeExecutablePath(vscodePath);
     const devExtensionPath = findExtensionRoot(__dirname);
 
@@ -194,6 +195,55 @@ export async function launchVsCodeWithMssqlExtension(
  * Walks up from startDir to find the nearest ancestor containing a package.json
  * with a vscode engine entry, identifying it as the VS Code extension root.
  */
+/**
+ * @vscode/test-electron normally returns the exact executable path. Recent macOS
+ * runner / VS Code combinations can return the historical Electron path even when
+ * the app bundle's executable name has changed. Resolve the executable that is
+ * actually present before Playwright launches it so CI validates the packaged VSIX
+ * instead of failing with ENOENT before VS Code starts.
+ */
+function resolveExistingVscodeExecutable(downloadedPath: string): string {
+    if (fs.existsSync(downloadedPath)) {
+        return downloadedPath;
+    }
+
+    if (process.platform !== "darwin") {
+        throw new Error(`Downloaded VS Code executable does not exist: ${downloadedPath}`);
+    }
+
+    const macOsDir = path.dirname(downloadedPath);
+    if (!fs.existsSync(macOsDir)) {
+        throw new Error(`VS Code macOS executable directory does not exist: ${macOsDir}`);
+    }
+
+    const executableCandidates = fs
+        .readdirSync(macOsDir)
+        .map((name) => path.join(macOsDir, name))
+        .filter((candidate) => {
+            try {
+                return fs.statSync(candidate).isFile() && (fs.statSync(candidate).mode & 0o111) !== 0;
+            } catch {
+                return false;
+            }
+        })
+        .sort();
+
+    if (executableCandidates.length !== 1) {
+        throw new Error(
+            `Expected exactly one executable in ${macOsDir}; found ${executableCandidates.length}: ${executableCandidates
+                .map((candidate) => path.basename(candidate))
+                .join(", ")}`,
+        );
+    }
+
+    console.log(
+        `Resolved macOS VS Code executable from missing path ${path.basename(downloadedPath)} to ${path.basename(
+            executableCandidates[0],
+        )}`,
+    );
+    return executableCandidates[0];
+}
+
 function findExtensionRoot(startDir: string): string {
     let dir = path.resolve(startDir);
     const root = path.parse(dir).root;
