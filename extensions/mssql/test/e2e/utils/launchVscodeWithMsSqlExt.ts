@@ -192,10 +192,6 @@ export async function launchVsCodeWithMssqlExtension(
 }
 
 /**
- * Walks up from startDir to find the nearest ancestor containing a package.json
- * with a vscode engine entry, identifying it as the VS Code extension root.
- */
-/**
  * @vscode/test-electron normally returns the exact executable path. Recent macOS
  * runner / VS Code combinations can return the historical Electron path even when
  * the app bundle's executable name has changed. Resolve the executable that is
@@ -221,7 +217,9 @@ function resolveExistingVscodeExecutable(downloadedPath: string): string {
         .map((name) => path.join(macOsDir, name))
         .filter((candidate) => {
             try {
-                return fs.statSync(candidate).isFile() && (fs.statSync(candidate).mode & 0o111) !== 0;
+                return (
+                    fs.statSync(candidate).isFile() && (fs.statSync(candidate).mode & 0o111) !== 0
+                );
             } catch {
                 return false;
             }
@@ -244,6 +242,10 @@ function resolveExistingVscodeExecutable(downloadedPath: string): string {
     return executableCandidates[0];
 }
 
+/**
+ * Walks up from startDir to find the nearest ancestor containing a package.json
+ * with a vscode engine entry, identifying it as the VS Code extension root.
+ */
 function findExtensionRoot(startDir: string): string {
     let dir = path.resolve(startDir);
     const root = path.parse(dir).root;
