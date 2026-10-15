@@ -68,7 +68,9 @@ export default defineConfig({
             launchArgs: ["--disable-gpu", "--user-data-dir", userDataDir],
             // CI must exercise the same-head API surface rather than ambient Marketplace builds.
             installExtensions: usePackagedDependencies ? packagedDependencies : undefined,
-            skipExtensionDependencies: usePackagedDependencies,
+            // Allow VS Code to resolve transitive extension dependencies, including SQL Bindings.
+            // The packaged MSSQL and Data Workspace VSIX files still pin the primary API providers.
+            skipExtensionDependencies: false,
             env: {
                 SQLPROJ_TEST_MODE: "1",
                 VSCODE_LOG_LEVEL: "error",
