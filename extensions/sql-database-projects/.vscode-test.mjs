@@ -28,31 +28,34 @@ function findSingleVsix(relativeDirectory, filenamePrefix) {
     return path.join(directory, matches[0]);
 }
 
-const usePackagedDependencies = process.env.GITHUB_ACTIONS === "true";
-const packagedDependencies = usePackagedDependencies
-    ? [
-          findSingleVsix("../mssql", "mssql-"),
-          findSingleVsix("../data-workspace", "data-workspace-vscode-"),
-      ]
-    : [];
+const discoveredPackagedDependencies = [
+    findSingleVsix("../mssql", "mssql-"),
+    findSingleVsix("../data-workspace", "data-workspace-vscode-"),
+];
+const requirePackagedDependencies =
+    process.env.GITHUB_ACTIONS === "true" || process.env.CI === "true";
+const usePackagedDependencies = discoveredPackagedDependencies.every(
+    (dependency) => dependency !== undefined,
+);
+const packagedDependencies = discoveredPackagedDependencies.filter(
+    (dependency) => dependency !== undefined,
+);
 
-if (usePackagedDependencies && packagedDependencies.some((dependency) => !dependency)) {
+if (requirePackagedDependencies && !usePackagedDependencies) {
     throw new Error(
-        "SqlProj CI requires exactly one same-run MSSQL VSIX and one Data Workspace VSIX.",
+        "SQLProj CI requires exactly one same-run MSSQL VSIX and one Data Workspace VSIX.",
     );
 }
 
-// TODO: Workaround for macOS CI EINVAL error — revert once the upstream VS Code issue is fixed.
-// A recent VS Code build changed the socket filename format (e.g. "1.12-main.sock"), pushing the
-// default .vscode-test/user-data/ path over macOS's hard 103-char Unix socket path limit.
-// Tracked in: https://github.com/microsoft/vscode/issues/319752
+// TODO: Remove this when https://github.com/microsoft/vscode/issues/236054 is fixed.
+// Extension host can fail to start when user data is placed under the macOS temp symlink.
 const tmpBaseDir = process.platform === "darwin" ? "/tmp" : os.tmpdir();
 const userDataDir = fs.mkdtempSync(path.join(tmpBaseDir, "vsc-sqlproj-"));
 process.on("exit", () => fs.rmSync(userDataDir, { recursive: true, force: true }));
 
 if (usePackagedDependencies) {
     // @vscode/test-cli installs pre-launch VSIX files into its normal .vscode-test/extensions
-    // directory. Clear that directory before CI installation so cached Marketplace builds cannot
+    // directory. Clear that directory before installation so cached Marketplace builds cannot
     // shadow the exact same-run MSSQL and Data Workspace packages.
     fs.rmSync(path.join(configDir, ".vscode-test", "extensions"), {
         recursive: true,
@@ -66,11 +69,9 @@ export default defineConfig({
             files: "out/test/**/*.test.js",
             version: "insiders",
             launchArgs: ["--disable-gpu", "--user-data-dir", userDataDir],
-            // CI must exercise the same-head API surface rather than ambient Marketplace builds.
+            // Exercise the same-run API surface whenever packaged dependencies are available.
             installExtensions: usePackagedDependencies ? packagedDependencies : undefined,
-            // Allow VS Code to resolve transitive extension dependencies, including SQL Bindings.
-            // The packaged MSSQL and Data Workspace VSIX files still pin the primary API providers.
-            skipExtensionDependencies: false,
+            skipExtensionDependencies: usePackagedDependencies,
             env: {
                 SQLPROJ_TEST_MODE: "1",
                 VSCODE_LOG_LEVEL: "error",
