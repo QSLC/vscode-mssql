@@ -28,15 +28,21 @@ function findSingleVsix(relativeDirectory, filenamePrefix) {
     return path.join(directory, matches[0]);
 }
 
-const usePackagedDependencies = process.env.GITHUB_ACTIONS === "true";
-const packagedDependencies = usePackagedDependencies
-    ? [
-          findSingleVsix("../mssql", "mssql-"),
-          findSingleVsix("../data-workspace", "data-workspace-vscode-"),
-      ]
-    : [];
+const discoveredPackagedDependencies = [
+    findSingleVsix("../mssql", "mssql-"),
+    findSingleVsix("../data-workspace", "data-workspace-vscode-"),
+];
+const requirePackagedDependencies =
+    process.env.GITHUB_ACTIONS === "true" || process.env.CI === "true";
+const usePackagedDependencies =
+    requirePackagedDependencies &&
+    discoveredPackagedDependencies.every((dependency) => dependency !== undefined);
+const packagedDependencies = discoveredPackagedDependencies.filter(
+    (dependency) => dependency !== undefined,
+);
+const sqlBindingsExtension = "ms-mssql.sql-bindings-vscode";
 
-if (usePackagedDependencies && packagedDependencies.some((dependency) => !dependency)) {
+if (requirePackagedDependencies && !usePackagedDependencies) {
     throw new Error(
         "SqlProj CI requires exactly one same-run MSSQL VSIX and one Data Workspace VSIX.",
     );
@@ -66,8 +72,10 @@ export default defineConfig({
             files: "out/test/**/*.test.js",
             version: "insiders",
             launchArgs: ["--disable-gpu", "--user-data-dir", userDataDir],
-            // CI must exercise the same-head API surface rather than ambient Marketplace builds.
-            installExtensions: usePackagedDependencies ? packagedDependencies : undefined,
+            // Pin same-run providers and install only the missing Marketplace dependency.
+            installExtensions: usePackagedDependencies
+                ? [...packagedDependencies, sqlBindingsExtension]
+                : undefined,
             skipExtensionDependencies: usePackagedDependencies,
             env: {
                 SQLPROJ_TEST_MODE: "1",
