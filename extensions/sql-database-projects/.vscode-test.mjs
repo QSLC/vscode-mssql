@@ -34,9 +34,9 @@ const discoveredPackagedDependencies = [
 ];
 const requirePackagedDependencies =
     process.env.GITHUB_ACTIONS === "true" || process.env.CI === "true";
-const usePackagedDependencies = discoveredPackagedDependencies.every(
-    (dependency) => dependency !== undefined,
-);
+const usePackagedDependencies =
+    requirePackagedDependencies &&
+    discoveredPackagedDependencies.every((dependency) => dependency !== undefined);
 const packagedDependencies = discoveredPackagedDependencies.filter(
     (dependency) => dependency !== undefined,
 );
